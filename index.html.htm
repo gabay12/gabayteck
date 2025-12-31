@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>גבאי-טק 2026 - המערכת הסופית</title>
+    <style>
+        :root {
+            --primary: #1a2a3a;
+            --accent: #c5a059;
+            --bg: #e0e4e8;
+            --available: #27ae60;
+            --occupied: #c0392b;
+            --unpaid: #e74c3c;
+            --paid: #2ecc71;
+            --seat-size: 32px;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; user-select: none; }
+        .container { max-width: 1300px; margin: 0 auto; }
+        
+        header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            background: var(--primary); color: white; padding: 15px 25px; border-radius: 12px; margin-bottom: 20px; 
+        }
+
+        .toolbar {
+            background: white; padding: 10px 20px; border-radius: 10px; margin-bottom: 10px;
+            display: flex; align-items: center; gap: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .work-area {
+            position: relative; background: #ffffff; background-image: radial-gradient(#d1d1d1 1px, transparent 1px);
+            background-size: 20px 20px; height: 550px; border-radius: 12px; margin-bottom: 20px; overflow: auto; border: 2px solid #333;
+        }
+
+        .draggable { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; z-index: 10; }
+        .edit-mode .draggable { cursor: move; outline: 1px dashed #666; }
+        .locked-mode .draggable { cursor: default; outline: none; }
+
+        .ark { width: 140px; height: 70px; background: #5d4037; color: white; border-radius: 4px; }
+        .bima { width: 110px; height: 90px; background: #8d6e63; color: white; border-radius: 8px; }
+
+        .seat-row-drag {
+            background: rgba(255,255,255,0.95); padding: 10px; border-radius: 8px;
+            display: flex; align-items: center; gap: 8px; white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .seat {
+            width: var(--seat-size); height: var(--seat-size); border-radius: 4px; display: flex; align-items: center; 
+            justify-content: center; cursor: pointer; font-size: 0.7rem; color: white; font-weight: bold; border: 1px solid rgba(0,0,0,0.2);
+        }
+        .seat.available { background: var(--available); }
+        .seat.occupied { background: var(--occupied); }
+
+        .panels { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+        .panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
+        .btn { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: right; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; color: var(--primary); }
+
+        .pay-status { padding: 5px 10px; border-radius: 4px; color: white; cursor: pointer; border: none; font-size: 0.8rem; min-width: 80px; }
+        .status-unpaid { background: var(--unpaid); }
+        .status-paid { background: var(--paid); }
+
+        .row-controls { display: flex; flex-direction: column; gap: 2px; }
+        .mini-btn { width: 20px; height: 20px; cursor: pointer; font-weight: bold; background: #eee; border: 1px solid #ccc; }
+    </style>
+</head>
+<body class="edit-mode">
+
+<div class="container">
+    <header>
+        <div><h1>🏛️ גבאי-טק 2026</h1><span>מערכת ניהול בית כנסת חכמה</span></div>
+        <div style="text-align:center">
+            <div>סה"כ הכנסות</div>
+            <div id="totalDisplay" style="font-size:1.8rem; color:var(--accent); font-weight:bold;">₪0</div>
+        </div>
+    </header>
+
+    <div class="toolbar">
+        <div>
+            <label>זום (גודל כיסאות): </label>
+            <input type="range" id="sizeSlider" min="20" max="60" value="32" oninput="updateSeatSize(this.value)" style="width:150px; vertical-align:middle;">
+        </div>
+        <button id="lockBtn" class="btn" style="background:#2ecc71; color:white;" onclick="toggleLock()">🔓 מצב עריכה פתוח</button>
+        <div style="margin-right: auto; font-size: 0.9rem;">
+            <span style="color:var(--available)">● פנוי</span> | 
+            <span style="color:var(--occupied)">● תפוס</span>
+        </div>
+    </div>
+
+    <div class="work-area" id="workArea">
+        <div id="ark" class="draggable ark">ארון קודש</div>
+        <div id="bima" class="draggable bima">בימה</div>
+    </div>
+
+    <div class="panels">
+        <div class="panel">
+            <h3>💰 רישום מכירה/תרומה</h3>
+            <input type="text" id="saleName" placeholder="שם המתפלל">
+            <input type="text" id="saleDesc" placeholder="תיאור (למשל: עליית שישי)">
+            <input type="number" id="salePrice" placeholder="סכום ב-₪">
+            <button class="btn" style="background:var(--primary); color:white; width:100%;" onclick="addGeneralSale()">הוסף לרשימה</button>
+            <hr>
+            <h3>🛠️ הוספת שורה למפה</h3>
+            <div style="display:flex; gap:5px;">
+                <input type="text" id="rowLabel" placeholder="אות" style="width:50px;">
+                <button class="btn" style="background:#ddd; color:#333; flex:1;" onclick="addNewRow()">צור שורה</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>📝 יומן מכירות וסטטוס תשלומים</h3>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>שם המתפלל</th>
+                            <th>תיאור / כיסא</th>
+                            <th>סכום</th>
+                            <th>תשלום</th>
+                            <th>מחיקה</th>
+                        </tr>
+                    </thead>
+                    <tbody id="salesTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let state = JSON.parse(localStorage.getItem('gabay_2026_final_v5')) || {
+        isLocked: false,
+        seatSize: 32,
+        items: [{ id: 'ark', top: 20, left: 450 }, { id: 'bima', top: 200, left: 465 }],
+        rows: [{ id: 'rowA', label: 'A', count: 8, top: 350, left: 300 }],
+        seatStates: {},
+        sales: []
+    };
+
+    let activeItem = null;
+    let offset = { x: 0, y: 0 };
+
+    function save() { localStorage.setItem('gabay_2026_final_v5', JSON.stringify(state)); }
+
+    function toggleLock() {
+        state.isLocked = !state.isLocked;
+        document.body.className = state.isLocked ? 'locked-mode' : 'edit-mode';
+        document.getElementById('lockBtn').innerText = state.isLocked ? '🔒 המפה נעולה' : '🔓 מצב עריכה פתוח';
+        document.getElementById('lockBtn').style.background = state.isLocked ? '#f39c12' : '#2ecc71';
+        save();
+        render(); // רינדור מחדש להסתרת כפתורי +/-
+    }
+
+    function updateSeatSize(val) {
+        state.seatSize = val;
+        document.documentElement.style.setProperty('--seat-size', val + 'px');
+        save();
+    }
+
+    document.addEventListener('mousedown', e => {
+        if (state.isLocked) return;
+        const dragEl = e.target.closest('.draggable');
+        if (dragEl) {
+            activeItem = dragEl;
+            const rect = activeItem.getBoundingClientRect();
+            offset.x = e.clientX - rect.left; offset.y = e.clientY - rect.top;
+        }
+    });
+
+    document.addEventListener('mousemove', e => {
+        if (activeItem && !state.isLocked) {
+            const area = document.getElementById('workArea').getBoundingClientRect();
+            activeItem.style.left = (e.clientX - area.left - offset.x) + 'px';
+            activeItem.style.top = (e.clientY - area.top - offset.y) + 'px';
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (activeItem) {
+            const item = state.items.find(i => i.id === activeItem.id) || state.rows.find(r => r.id === activeItem.id);
+            if (item) { item.top = parseInt(activeItem.style.top); item.left = parseInt(activeItem.style.left); }
+            activeItem = null; save();
+        }
+    });
+
+    function togglePayment(saleId) {
+        const sale = state.sales.find(s => s.id === saleId);
+        if (sale) { sale.paid = !sale.paid; save(); render(); }
+    }
+
+    function buySeat(rowLabel, num) {
+        const id = rowLabel + num;
+        if (state.seatStates[id]) {
+            if(confirm("לפנות כיסא " + id + "?")) {
+                delete state.seatStates[id];
+                state.sales = state.sales.filter(s => s.seatId !== id);
+                save(); render();
+            } return;
+        }
+        const name = prompt("שם הרוכש לכיסא " + id + ":"); if (!name) return;
+        const price = prompt("סכום:", "180");
+        state.seatStates[id] = 'occupied';
+        state.sales.unshift({ id: Date.now(), seatId: id, name, desc: "כיסא " + id, price: parseFloat(price) || 0, paid: false });
+        save(); render();
+    }
+
+    function addGeneralSale() {
+        const name = document.getElementById('saleName').value;
+        const desc = document.getElementById('saleDesc').value;
+        const price = document.getElementById('salePrice').value;
+        if (!name || !price) return alert("נא להזין שם וסכום");
+        state.sales.unshift({ id: Date.now(), name, desc: desc || "כללי", price: parseFloat(price) || 0, paid: false });
+        document.getElementById('saleName').value = ''; document.getElementById('saleDesc').value = ''; document.getElementById('salePrice').value = '';
+        save(); render();
+    }
+
+    function deleteSale(id) {
+        if(!confirm("למחוק?")) return;
+        const sale = state.sales.find(s => s.id === id);
+        if (sale && sale.seatId) delete state.seatStates[sale.seatId];
+        state.sales = state.sales.filter(s => s.id !== id);
+        save(); render();
+    }
+
+    function addNewRow() {
+        const label = document.getElementById('rowLabel').value || 'X';
+        state.rows.push({ id: 'row' + Date.now(), label, count: 10, top: 100, left: 100 });
+        save(); render();
+    }
+
+    function modifySingleSeat(rowId, amount) {
+        const row = state.rows.find(r => r.id === rowId);
+        if (row) { row.count = Math.max(1, row.count + amount); save(); render(); }
+    }
+
+    function render() {
+        const area = document.getElementById('workArea');
+        document.querySelectorAll('.seat-row-drag').forEach(el => el.remove());
+
+        state.rows.forEach(row => {
+            const rowDiv = document.createElement('div');
+            rowDiv.id = row.id; rowDiv.className = 'draggable seat-row-drag';
+            rowDiv.style.top = row.top + 'px'; rowDiv.style.left = row.left + 'px';
+            
+            let controlsHtml = state.isLocked ? '' : `<div class="row-controls"><button onclick="modifySingleSeat('${row.id}',1)">+</button><button onclick="modifySingleSeat('${row.id}',-1)">-</button></div>`;
+            
+            rowDiv.innerHTML = `${controlsHtml}<b style="margin:0 10px">${row.label}</b>`;
+            const grp = document.createElement('div'); grp.style.display = 'flex'; grp.style.gap = '4px';
+            for (let i = 1; i <= row.count; i++) {
+                const sId = row.label + i;
+                const status = state.seatStates[sId] || 'available';
+                const s = document.createElement('div'); s.className = `seat ${status}`; s.innerText = i;
+                s.onmousedown = e => e.stopPropagation(); s.onclick = () => buySeat(row.label, i);
+                grp.appendChild(s);
+            }
+            rowDiv.appendChild(grp); area.appendChild(rowDiv);
+        });
+
+        const tbody = document.getElementById('salesTable');
+        tbody.innerHTML = '';
+        let total = 0;
+        state.sales.forEach(s => {
+            total += s.price;
+            const statusClass = s.paid ? 'status-paid' : 'status-unpaid';
+            const statusText = s.paid ? 'שילם' : 'לא שילם';
+            tbody.innerHTML += `<tr>
+                <td><b>${s.name}</b></td>
+                <td>${s.desc}</td>
+                <td>₪${s.price.toLocaleString()}</td>
+                <td><button class="pay-status ${statusClass}" onclick="togglePayment(${s.id})">${statusText}</button></td>
+                <td><button onclick="deleteSale(${s.id})" style="background:none; border:none; cursor:pointer;">❌</button></td>
+            </tr>`;
+        });
+        document.getElementById('totalDisplay').innerText = '₪' + total.toLocaleString();
+    }
+
+    // הגדרה ראשונית
+    document.documentElement.style.setProperty('--seat-size', state.seatSize + 'px');
+    document.getElementById('sizeSlider').value = state.seatSize;
+    document.body.className = state.isLocked ? 'locked-mode' : 'edit-mode';
+    document.getElementById('lockBtn').innerText = state.isLocked ? '🔒 המפה נעולה' : '🔓 מצב עריכה פתוח';
+    document.getElementById('lockBtn').style.background = state.isLocked ? '#f39c12' : '#2ecc71';
+    document.getElementById('ark').style.top = state.items[0].top + 'px';
+    document.getElementById('ark').style.left = state.items[0].left + 'px';
+    document.getElementById('bima').style.top = state.items[1].top + 'px';
+    document.getElementById('bima').style.left = state.items[1].left + 'px';
+    render();
+</script>
+
+</body>
+</html>
